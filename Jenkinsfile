@@ -6,7 +6,7 @@ pipeline {
    stages{
     stage('CompileandRunSonarAnalysis') {
             steps {	
-		sh 'mvn clean verify sonar:sonar -Dsonar.projectKey=asgbuggywebapp45_asgbuggywebapp -Dsonar.organization=asgbuggywebapp45 -Dsonar.host.url=https://sonarcloud.io -Dsonar.token=ca5411dc9ba227be472a0ce1fcacf1fefcdf2d71'
+		sh 'mvn clean verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=asgbuggywebapp002_asgbuggywebapp -Dsonar.organization=asgbuggywebapp002 -Dsonar.host.url=https://sonarcloud.io -Dsonar.token=6b2e10bcdc60f9555eeea2e3a710310e499ad73c'
 			}
     }
 	stage('RunSCAAnalysisUsingSnyk') {
@@ -35,12 +35,28 @@ pipeline {
                 }
             }
     	}
-	   stage('Kubernetes Deployment of ASG Bugg Web Application') {
+    stage('Configure EKS Cluster') {
             steps {
-                withAWS(credentials: 'aws-credentials', region: 'us-east-1') {
+                withAWS(
+                    credentials: 'aws-credentials',
+                    region: 'us-east-1'
+                ) {
 
-      // Generate fresh kubeconfig that contains a valid IAM token
-            
+                    sh '''
+                        echo "Checking AWS Identity"
+                        aws sts get-caller-identity
+                        echo "Updating EKS Kubeconfig"
+                        aws eks update-kubeconfig --name kubernetes-cluster --region us-east-1
+                        echo "Current Kubernetes Context"
+                        kubectl config current-context
+                    '''
+                }
+            }
+        }
+
+	stage('Kubernetes Deployment of ASG Bugg Web Application') {
+        steps {
+            withAWS(credentials: 'aws-credentials', region: 'us-east-1') {
 
             sh 'kubectl get nodes'
             sh 'kubectl delete all --all -n devsecops || true'
@@ -48,7 +64,6 @@ pipeline {
     }
   }
 }
-
 	   
 	stage ('wait_for_testing'){
 	   steps {
@@ -62,10 +77,6 @@ pipeline {
 
             sh '''
             pkill -f zap || true
-
-            aws eks update-kubeconfig \
-              --name kubernetes-cluster \
-              --region us-east-1
 
             kubectl get nodes
             kubectl get svc -n devsecops
